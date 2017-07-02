@@ -271,6 +271,7 @@ MODULES   += menu contact vumeter mwi account natpmp httpd
 MODULES   += srtp
 MODULES   += uuid
 MODULES   += debug_cmd
+MODULES   += autoconnect
 
 ifneq ($(HAVE_PTHREAD),)
 MODULES   += aubridge aufile
