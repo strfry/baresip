@@ -9,7 +9,7 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-BARESIP_FLAGS := MOD_AUTODETECT=1
+BARESIP_FLAGS := MOD_AUTODETECT=1 STATIC=1
 
 EXTRA_CFLAGS:="$(shell dpkg-buildflags --get CFLAGS)"
 EXTRA_LFLAGS:="$(shell dpkg-buildflags --get LDFLAGS)"
@@ -25,9 +25,10 @@ build: build-stamp
 
 build-stamp: configure-stamp 
 	dh_testdir
-	$(MAKE) RELEASE=1 $(BARESIP_FLAGS) DESTDIR=$(CURDIR)/debian/baresip \
+	$(MAKE) RELEASE=1 $(BARESIP_FLAGS) DESTDIR=$(CURDIR)/debian/libbaresip \
 		EXTRA_CFLAGS=$(EXTRA_CFLAGS) \
-		EXTRA_LFLAGS=$(EXTRA_LFLAGS)
+		EXTRA_LFLAGS=$(EXTRA_LFLAGS) \
+		libbaresip.so
 	touch build-stamp
 
 clean:
@@ -42,7 +43,7 @@ install: build
 	dh_testroot
 	dh_prep
 	dh_installdirs
-	$(MAKE) RELEASE=1 $(BARESIP_FLAGS) install DESTDIR=$(CURDIR)/debian/baresip
+	$(MAKE) RELEASE=1 $(BARESIP_FLAGS) install-shared DESTDIR=$(CURDIR)/debian/libbaresip
 
 
 # Build architecture-independent files here.
@@ -53,10 +54,10 @@ binary-indep: build install
 binary-arch: build install
 	dh_testdir
 	dh_testroot
-	dh_installchangelogs 
-	dh_installdocs
+#	dh_installchangelogs 
+#	dh_installdocs
 	dh_installexamples
-#	dh_install
+	dh_install
 #	dh_installmenu
 #	dh_installdebconf	
 #	dh_installlogrotate

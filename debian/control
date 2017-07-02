@@ -1,14 +1,14 @@
-Source: baresip
+Source: libbaresip
 Section: comm
 Priority: optional
-Maintainer: Alfred E. Heggestad <aeh@db.org>
+Maintainer: Jonathan Sieber <mail@strfry.org>
 Standards-Version: 3.9.5
-Build-Depends: debhelper (>= 9.20120311), librem-dev (>= 0.5.0), libre-dev (>= 0.5.4), libasound2-dev, libavformat-dev, libavdevice-dev, libswscale-dev
+Build-Depends: debhelper (>= 9.20120311),  libasound2-dev, libavdevice-dev, libswscale-dev, libavcodec-dev, libvpx-dev, libopus-dev
 Homepage: http://www.creytiv.com/
 
-Package: baresip
+Package: libbaresip
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, librem (>= 0.5.0), libre (>= 0.5.4)
+Depends: ${shlibs:Depends}, ${misc:Depends}, libopus0, libvpx1, libavcodec57, libx264-148
 Description: Modular SIP User-Agent with audio and video support
  Design goals:
  .
