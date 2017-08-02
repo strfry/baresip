@@ -105,7 +105,7 @@ static OMX_ERRORTYPE FillBufferDone(OMX_HANDLETYPE hComponent,
 static struct OMX_CALLBACKTYPE callbacks = {
 	EventHandler,
 	EmptyBufferDone,
-	&FillBufferDone
+	FillBufferDone
 };
 
 
@@ -117,8 +117,8 @@ int omx_init(struct omx_state* st)
 #endif
 
 	st->buffers = NULL;
-
 	err = OMX_Init();
+	/* TODO: Handle failure when RPi code runs in emulator */
 #ifdef RASPBERRY_PI
 	err |= OMX_GetHandle(&st->video_render,
 		"OMX.broadcom.video_render", 0, &callbacks);
@@ -152,46 +152,6 @@ static void block_until_state_changed(OMX_HANDLETYPE hComponent,
 	}
 }
 
-
-void omx_deinit(struct omx_state* st)
-{
-	info("omx_deinit");
-	OMX_SendCommand(st->video_render,
-		OMX_CommandStateSet, OMX_StateIdle, NULL);
-	block_until_state_changed(st->video_render, OMX_StateIdle);
-	OMX_SendCommand(st->video_render,
-		OMX_CommandStateSet, OMX_StateLoaded, NULL);
-	block_until_state_changed(st->video_render, OMX_StateLoaded);
-	OMX_FreeHandle(st->video_render);
-	OMX_Deinit();
-}
-
-
-void omx_display_disable(struct omx_state* st)
-{
-	(void)st;
-
-	#ifdef RASPBERRY_PI
-	OMX_ERRORTYPE err;
-	OMX_CONFIG_DISPLAYREGIONTYPE config;
-	memset(&config, 0, sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
-	config.nSize = sizeof(OMX_CONFIG_DISPLAYREGIONTYPE);
-	config.nVersion.nVersion = OMX_VERSION;
-	config.nPortIndex = VIDEO_RENDER_PORT;
-	config.fullscreen = 0;
-	config.set = OMX_DISPLAY_SET_FULLSCREEN;
-
-	err = OMX_SetParameter(st->video_render,
-		OMX_IndexConfigDisplayRegion, &config);
-
-	if (err != 0) {
-		warning("omx_display_disable command failed");
-	}
-
-	#endif
-}
-
-
 static void block_until_port_changed(OMX_HANDLETYPE hComponent,
 	OMX_U32 nPortIndex, OMX_BOOL bEnabled) {
 
@@ -215,6 +175,147 @@ static void block_until_port_changed(OMX_HANDLETYPE hComponent,
 			sys_usleep(10000);
 		}
 	}
+}
+
+#define DUMP_CASE(x) case x: return #x;
+
+const char* dump_OMX_ERRORTYPE (OMX_ERRORTYPE error)
+{
+	switch (error){
+		DUMP_CASE (OMX_ErrorNone)
+		DUMP_CASE (OMX_ErrorInsufficientResources)
+		DUMP_CASE (OMX_ErrorUndefined)
+		DUMP_CASE (OMX_ErrorInvalidComponentName)
+		DUMP_CASE (OMX_ErrorComponentNotFound)
+		DUMP_CASE (OMX_ErrorInvalidComponent)
+		DUMP_CASE (OMX_ErrorBadParameter)
+		DUMP_CASE (OMX_ErrorNotImplemented)
+		DUMP_CASE (OMX_ErrorUnderflow)
+		DUMP_CASE (OMX_ErrorOverflow)
+		DUMP_CASE (OMX_ErrorHardware)
+		DUMP_CASE (OMX_ErrorInvalidState)
+		DUMP_CASE (OMX_ErrorStreamCorrupt)
+		DUMP_CASE (OMX_ErrorPortsNotCompatible)
+		DUMP_CASE (OMX_ErrorResourcesLost)
+		DUMP_CASE (OMX_ErrorNoMore)
+		DUMP_CASE (OMX_ErrorVersionMismatch)
+		DUMP_CASE (OMX_ErrorNotReady)
+		DUMP_CASE (OMX_ErrorTimeout)
+		DUMP_CASE (OMX_ErrorSameState)
+		DUMP_CASE (OMX_ErrorResourcesPreempted)
+		DUMP_CASE (OMX_ErrorPortUnresponsiveDuringAllocation)
+		DUMP_CASE (OMX_ErrorPortUnresponsiveDuringDeallocation)
+		DUMP_CASE (OMX_ErrorPortUnresponsiveDuringStop)
+		DUMP_CASE (OMX_ErrorIncorrectStateTransition)
+		DUMP_CASE (OMX_ErrorIncorrectStateOperation)
+		DUMP_CASE (OMX_ErrorUnsupportedSetting)
+		DUMP_CASE (OMX_ErrorUnsupportedIndex)
+		DUMP_CASE (OMX_ErrorBadPortIndex)
+		DUMP_CASE (OMX_ErrorPortUnpopulated)
+		DUMP_CASE (OMX_ErrorComponentSuspended)
+		DUMP_CASE (OMX_ErrorDynamicResourcesUnavailable)
+		DUMP_CASE (OMX_ErrorMbErrorsInFrame)
+		DUMP_CASE (OMX_ErrorFormatNotDetected)
+		DUMP_CASE (OMX_ErrorContentPipeOpenFailed)
+		DUMP_CASE (OMX_ErrorContentPipeCreationFailed)
+		DUMP_CASE (OMX_ErrorSeperateTablesUsed)
+		DUMP_CASE (OMX_ErrorTunnelingUnsupported)
+		/*DUMP_CASE (OMX_ErrorDiskFull)
+		DUMP_CASE (OMX_ErrorMaxFileSize)
+		DUMP_CASE (OMX_ErrorDrmUnauthorised)
+		DUMP_CASE (OMX_ErrorDrmExpired)
+		DUMP_CASE (OMX_ErrorDrmGeneral) */
+		default: return "unknown OMX_ERRORTYPE";
+	}
+}
+
+void change_state (OMX_HANDLETYPE component, OMX_STATETYPE state){
+	OMX_ERRORTYPE err;
+
+	if ((err = OMX_SendCommand (component, OMX_CommandStateSet, state,
+								0))) {
+		error("error: OMX_SendCommand: %s\n",
+			dump_OMX_ERRORTYPE (err));
+	}
+}
+
+
+void disable_port (OMX_HANDLETYPE component, OMX_U32 port)
+{
+	OMX_ERRORTYPE err;
+	if ((err = OMX_SendCommand (component, OMX_CommandPortDisable,
+							port, 0))){
+	error("error: OMX_SendCommand: %s\n",
+	dump_OMX_ERRORTYPE (err));
+  }
+}
+
+void enable_port (OMX_HANDLETYPE component, OMX_U32 port)
+{
+	OMX_ERRORTYPE err;
+	if ((err = OMX_SendCommand (component, OMX_CommandPortEnable,
+							port, 0))) {
+		error("error: OMX_SendCommand: %s\n",
+		dump_OMX_ERRORTYPE (err));
+  }
+}
+
+void omx_deinit(struct omx_state* st)
+{
+	info("omx_deinit");
+	/* TODO: Sanity check if component is really in "LOADED" state */
+	OMX_FreeHandle(st->video_render);
+	OMX_Deinit();
+}
+
+
+void omx_display_disable(struct omx_state* st)
+{
+	int i;
+	(void)st;
+
+	#ifdef RASPBERRY_PI
+	OMX_ERRORTYPE err;
+	OMX_CONFIG_DISPLAYREGIONTYPE config;
+	memset(&config, 0, sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
+	config.nSize = sizeof(OMX_CONFIG_DISPLAYREGIONTYPE);
+	config.nVersion.nVersion = OMX_VERSION;
+	config.nPortIndex = VIDEO_RENDER_PORT;
+	config.fullscreen = 0;
+	config.set = OMX_DISPLAY_SET_FULLSCREEN;
+
+	err = OMX_SetParameter(st->video_render,
+		OMX_IndexConfigDisplayRegion, &config);
+
+	if (err != 0) {
+		warning("omx_display_disable command failed");
+	}
+
+	#endif
+
+	debug("omx: send video_render compontent to StateIdle\n");
+	change_state(st->video_render, OMX_StateIdle);
+	block_until_state_changed(st->video_render, OMX_StateIdle);
+
+	debug("omx: disable input port of video_render component\n");
+	disable_port(st->video_render, VIDEO_RENDER_PORT);
+
+	debug("omx: freeing buffers\n");
+	if (st->buffers) {
+		for (i = 0; i < st->num_buffers; i++) {
+			OMX_FreeBuffer(st->video_render, VIDEO_RENDER_PORT,
+				st->buffers[i]);
+		}
+		free(st->buffers);
+		st->buffers = 0;
+	}
+
+	block_until_port_changed(st->video_render, VIDEO_RENDER_PORT, false);
+
+//	exit(1);
+	debug("omx: send video_render component to StateLoaded\n");
+	change_state(st->video_render, OMX_StateLoaded);
+	block_until_state_changed(st->video_render, OMX_StateLoaded);
 }
 
 
@@ -275,6 +376,9 @@ int omx_display_enable(struct omx_state* st,
 	if (err) {
 		error("omx_display_enable: could not set port definition\n");
 	}
+
+	debug("omx: video_render enable input port\n");
+	enable_port(st->video_render, VIDEO_RENDER_PORT);
 	block_until_port_changed(st->video_render, VIDEO_RENDER_PORT, true);
 
 	err |= OMX_GetParameter(st->video_render,
@@ -286,13 +390,11 @@ int omx_display_enable(struct omx_state* st,
 		goto exit;
 	}
 
-	/* HACK: This state-change sometimes hangs for unknown reasons,
-	 *       so we just send the state command and wait 50 ms */
-	/* block_until_state_changed(st->video_render, OMX_StateIdle); */
-
-	OMX_SendCommand(st->video_render, OMX_CommandStateSet,
-		OMX_StateIdle, NULL);
-	sys_usleep(50000);
+	/* Send the component to 'Idle' state, where buffers can be
+	 * allocated. Successful state change will be indicated once
+	 * the minimum amount of buffers was allocated. */
+	debug("omx: sending video_render component to OMX_StateIdle\n");
+	change_state(st->video_render, OMX_StateIdle);
 
 	if (!st->buffers) {
 		st->buffers =
@@ -312,9 +414,10 @@ int omx_display_enable(struct omx_state* st,
 		}
 	}
 
-	debug("omx_update_size: send to execute state");
-	OMX_SendCommand(st->video_render, OMX_CommandStateSet,
-		OMX_StateExecuting, NULL);
+	block_until_state_changed(st->video_render, OMX_StateIdle);
+
+	debug("omx: video_render to executing state\n");
+	change_state(st->video_render, OMX_StateExecuting);
 	block_until_state_changed(st->video_render, OMX_StateExecuting);
 
 exit:
