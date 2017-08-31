@@ -7,8 +7,8 @@
 #define GL_GLEXT_PROTOTYPES
 //#include <GLES2/gl2.h>
 #include <SDL2/SDL.h>
-//#include <SDL2/SDL_opengles2.h>
-#include <SDL2/SDL_opengl.h>
+#include <SDL2/SDL_opengles2.h>
+//#include <SDL2/SDL_opengl.h>
 //#include <GL/gl.h>
 //#include <GL/glext.h>
 #include <re.h>
@@ -33,14 +33,25 @@ struct vidisp_st {
 
 static struct vidisp *vid;       /**< OPENGL Video-display      */
 
+static const char* VProgram =
+	"attribute vec2 position;    \n"
+	"void main()                  \n"
+	"{                            \n"
+	"   gl_Position = vec4(position, 0.0, 1.0);  \n"
+	"}                            \n";
+
+    //
+  //"  //nx=gl_TexCoord[0].x;\n"
+  //"  //ny=(%d.0-gl_TexCoord[0].y);\n"
+    //
 static const char *FProgram=
   "uniform sampler2D Ytex;\n"
   "uniform sampler2D Utex,Vtex;\n"
   "void main(void) {\n"
   "  float nx,ny,r,g,b,y,u,v;\n"
   "  vec4 txl,ux,vx;"
-  "  nx=gl_TexCoord[0].x;\n"
-  "  ny=(%d.0-gl_TexCoord[0].y);\n"
+  "  nx=gl_FragCoord.x / 1280.0;\n"
+  "  ny=(%d.0-gl_FragCoord.y) / 720.0;\n"
   "  y=texture2D(Ytex,vec2(nx,ny)).r;\n"
   "  u=texture2D(Utex,vec2(nx/2.0,ny/2.0)).r;\n"
   "  v=texture2D(Vtex,vec2(nx/2.0,ny/2.0)).r;\n"
@@ -59,15 +70,7 @@ static const char *FProgram=
 
 static void destructor(void *arg)
 {
-//	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 	struct vidisp_st *st = arg;
-
-	//if (st->ctx) {
-		//[st->ctx clearDrawable];
-		//[st->ctx release];
-	//}
-
-	//[st->win close];
 
 	if (st->PHandle) {
 		glUseProgram(0);
@@ -75,8 +78,6 @@ static void destructor(void *arg)
 	}
 
 	mem_deref(st->prog);
-
-	//[pool release];
 }
 
 
@@ -123,7 +124,7 @@ static void opengl_reset(struct vidisp_st *st, const struct vidsz *sz)
 
 static int setup_shader(struct vidisp_st *st, int width, int height)
 {
-	GLuint FSHandle, PHandle;
+	GLuint VSHandle, FSHandle, PHandle;
 	const char *progv[1];
 	char buf[1024];
 	int err, i;
@@ -136,27 +137,40 @@ static int setup_shader(struct vidisp_st *st, int width, int height)
 		return err;
 
 	glClearColor(0, 0, 0, 0);
-	glColor3f(1.0f, 0.84f, 0.0f);
+	//glColor3f(1.0f, 0.84f, 0.0f);
 	
 	/* Set up program objects. */
 	PHandle = glCreateProgram();
+	VSHandle = glCreateShader(GL_VERTEX_SHADER);
 	FSHandle = glCreateShader(GL_FRAGMENT_SHADER);
 	
 	/* Compile the shader. */
+	
+	progv[0] = VProgram;
+	glShaderSource(VSHandle, 1, progv, NULL);
+	glCompileShader(VSHandle);
+	/* Print the compilation log. */
+	glGetShaderiv(VSHandle, GL_COMPILE_STATUS, &i);
+	if (i != 1) {
+		warning("opengl: vertex shader compile failed\n");
+		return ENOSYS;
+	}
+	
 	progv[0] = st->prog;
 	glShaderSource(FSHandle, 1, progv, NULL);
 	glCompileShader(FSHandle);
-
+	
 	/* Print the compilation log. */
 	glGetShaderiv(FSHandle, GL_COMPILE_STATUS, &i);
 	if (i != 1) {
-		warning("opengl: shader compile failed\n");
+		warning("opengl: fragment shader compile failed\n");
 		return ENOSYS;
 	}
 
 	glGetShaderInfoLog(FSHandle, sizeof(buf), NULL, buf);
 
 	/* Create a complete program object. */
+	glAttachShader(PHandle, VSHandle);
 	glAttachShader(PHandle, FSHandle);
 	glLinkProgram(PHandle);
 
@@ -224,21 +238,13 @@ static int alloc(struct vidisp_st **stp, const struct vidisp *vd,
 	}
 */
 
-	/* Use provided view, or create our own */
 	if (prm && prm->view) {
-		//[st->ctx setView:prm->view];
 	}
 	else {
 		err = create_window(st);
 		if (err)
 			goto out;
-
-//		if (prm)
-//			prm->view = [st->win contentView];
 	}
-
-	/* Enable vertical sync */
-	//[st->ctx setValues:&vsync forParameter:NSOpenGLCPSwapInterval];
 
  out:
 	if (err)
@@ -311,8 +317,13 @@ static inline void draw_yuv(GLuint PHandle, int height,
 }
 
 
-static inline void draw_blit(int width, int height)
+static inline void draw_blit(int width, int height, int PHandle)
 {
+	static int VBO = -1;
+	if (VBO == -1) {
+		//glGenBuffers
+	}
+	
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	GLfloat texcoords[] = {
@@ -326,11 +337,13 @@ static inline void draw_blit(int width, int height)
                       1, -1, 0, // top left corner
                        -1, 1, 0, // top right corner
                        1, 1, 0}; // bottom right corner
-
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glVertexPointer(3, GL_FLOAT, 0, vertices);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-	glTexCoordPointer(2, GL_FLOAT, 0, texcoords);
+    // Specify the layout of the vertex data
+    GLint posAttrib = glGetAttribLocation(PHandle, "position");
+    glEnableVertexAttribArray(posAttrib);
+    glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 0, vertices);
+   
+	//glEnableClientState(GL_VERTEX_ARRAY);
+	    
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
@@ -380,7 +393,7 @@ static int display(struct vidisp_st *st, const char *title,
 			 frame->data[0], frame->linesize[0],
 			 frame->data[1], frame->linesize[1],
 			 frame->data[2], frame->linesize[2]);
-		draw_blit(frame->size.w, frame->size.h);
+		draw_blit(frame->size.w, frame->size.h, st->PHandle);
 	}
 	else {
 		warning("opengl: unknown pixel format %s\n",
@@ -398,8 +411,6 @@ static void hide(struct vidisp_st *st)
 {
 	if (!st)
 		return;
-
-	//[st->win orderOut:nil];
 }
 
 
