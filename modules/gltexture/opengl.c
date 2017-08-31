@@ -37,8 +37,8 @@ static const char *FProgram=
   "void main(void) {\n"
   "  float nx,ny,r,g,b,y,u,v;\n"
   "  vec4 txl,ux,vx;"
-  "  nx=gl_TexCoord[0].x / 1280.0;\n"
-  "  ny=(%d.0-gl_TexCoord[0].y) / 720.0;\n"
+  "  nx=gl_TexCoord[0].x;\n"
+  "  ny=(%d.0-gl_TexCoord[0].y);\n"
   "  y=texture2D(Ytex,vec2(nx,ny)).r;\n"
   "  u=texture2D(Utex,vec2(nx/2.0,ny/2.0)).r;\n"
   "  v=texture2D(Vtex,vec2(nx/2.0,ny/2.0)).r;\n"
@@ -322,95 +322,22 @@ static inline void draw_blit(int width, int height)
 
 	GLfloat texcoords[] = {
 		0, 0,
-		width, 0,
-		width, height,
-		0, height
+		1.0, 0,
+		0, 1.0,
+		1.0, 1.0,
 	};
 
 	GLfloat vertices[] = {0, 0, 0, // bottom left corner
-                      width,  0, 0, // top left corner
-                       width,  height, 0, // top right corner
-                       0, height, 0}; // bottom right corner
+                      width, 0, 0, // top left corner
+                       0, height, 0, // top right corner
+                       width, height, 0}; // bottom right corner
 
-GLubyte indices[] = {0,1,2, // first triangle (bottom left - top left - top right)
-                     0,2,3}; // second triangle (bottom left - top right - bottom right)
-
-glVertexPointer(3, GL_FLOAT, 0, vertices);
-glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, indices);
-/*
-	glDrawElements(GL_QUADS, 6, GL_UNSIGNED_SHORT, kIndicesInformation);
-
-	glBegin(GL_QUADS);
-	{
-		glTexCoord2i(0, 0);
-		glVertex2i(0, 0);
-		glTexCoord2i(width, 0);
-		glVertex2i(width, 0);
-		glTexCoord2i(width, height);
-		glVertex2i(width, height);
-		glTexCoord2i(0, height);
-		glVertex2i(0, height);
-	}
-	glEnd();
-	*/
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glVertexPointer(3, GL_FLOAT, 0, vertices);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+	glTexCoordPointer(2, GL_FLOAT, 0, texcoords);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
-
-
-static inline void draw_rgb(const uint8_t *pic, int w, int h)
-{
-	glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, 1);
-
-	//glTextureRangeAPPLE(GL_TEXTURE_2D, w * h * 2, pic);
-
-	glTexParameteri(GL_TEXTURE_2D,
-			GL_TEXTURE_STORAGE_HINT_APPLE,
-			GL_STORAGE_SHARED_APPLE);
-	glPixelStorei(GL_UNPACK_CLIENT_STORAGE_APPLE, GL_TRUE);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-			GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
-			GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
-			GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
-			GL_CLAMP_TO_EDGE);
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
-		     GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pic);
-
-	/* draw */
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glEnable(GL_TEXTURE_2D);
-
-	glViewport(0, 0, w, h);
-
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-
-	glOrtho( (GLfloat)0, (GLfloat)w, (GLfloat)0, (GLfloat)h, -1.0, 1.0);
-
-	glBindTexture(GL_TEXTURE_2D, 1);
-
-	glMatrixMode(GL_TEXTURE);
-	glLoadIdentity();
-
-	glBegin(GL_QUADS);
-	{
-		glTexCoord2f(0.0f, 0.0f);
-		glVertex2f(0.0f, h);
-		glTexCoord2f(0.0f, h);
-		glVertex2f(0.0f, 0.0f);
-		glTexCoord2f(w, h);
-		glVertex2f(w, 0.0f);
-		glTexCoord2f(w, 0.0f);
-		glVertex2f(w, h);
-	}
-	glEnd();
-}
-
 
 static int display(struct vidisp_st *st, const char *title,
 		   const struct vidframe *frame)
@@ -481,21 +408,6 @@ static int display(struct vidisp_st *st, const char *title,
 			 frame->data[1], frame->linesize[1],
 			 frame->data[2], frame->linesize[2]);
 		draw_blit(frame->size.w, frame->size.h);
-	}
-	else if (frame->fmt == VID_FMT_RGB32) {
-
-		glClearColor(0, 0, 0, 0);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		glViewport(0, 0, frame->size.w, frame->size.h);
-
-		glMatrixMode(GL_PROJECTION);
-		glLoadIdentity();
-
-		glMatrixMode(GL_MODELVIEW);
-		glLoadIdentity();
-
-		draw_rgb(frame->data[0], frame->size.w, frame->size.h);
 	}
 	else {
 		warning("opengl: unknown pixel format %s\n",
