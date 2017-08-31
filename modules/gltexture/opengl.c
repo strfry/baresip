@@ -135,11 +135,6 @@ static int setup_shader(struct vidisp_st *st, int width, int height)
 	if (err)
 		return err;
 
-	
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glOrtho(0, width, 0, height, -1, 1);
-	glViewport(0, 0, width, height);
 	glClearColor(0, 0, 0, 0);
 	glColor3f(1.0f, 0.84f, 0.0f);
 	
@@ -327,10 +322,10 @@ static inline void draw_blit(int width, int height)
 		1.0, 1.0,
 	};
 
-	GLfloat vertices[] = {0, 0, 0, // bottom left corner
-                      width, 0, 0, // top left corner
-                       0, height, 0, // top right corner
-                       width, height, 0}; // bottom right corner
+	GLfloat vertices[] = {-1, -1, 0, // bottom left corner
+                      1, -1, 0, // top left corner
+                       -1, 1, 0, // top right corner
+                       1, 1, 0}; // bottom right corner
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glVertexPointer(3, GL_FLOAT, 0, vertices);
@@ -342,14 +337,8 @@ static inline void draw_blit(int width, int height)
 static int display(struct vidisp_st *st, const char *title,
 		   const struct vidframe *frame)
 {
-	//NSAutoreleasePool *pool;
 	//bool upd = false;
 	int err = 0;
-
-
-	//pool = [[NSAutoreleasePool alloc] init];
-	//if (!pool)
-	//	return ENOMEM;
 
 	if (!vidsz_cmp(&st->size, &frame->size)) {
 		if (st->size.w && st->size.h) {
@@ -375,35 +364,7 @@ static int display(struct vidisp_st *st, const char *title,
 
 		//upd = true;
 	}
-/*
-	if (upd && st->win) {
 
-		const NSSize size = {frame->size.w, frame->size.h};
-		char capt[256];
-
-		[st->win setContentSize:size];
-
-		if (title) {
-			re_snprintf(capt, sizeof(capt), "%s - %u x %u",
-				    title, frame->size.w, frame->size.h);
-		}
-		else {
-			re_snprintf(capt, sizeof(capt), "%u x %u",
-				    frame->size.w, frame->size.h);
-		}
-
-		[st->win setTitle:[NSString stringWithUTF8String:capt]];
-
-		[st->win makeKeyAndOrderFront:nil];
-		[st->win display];
-		[st->win center];
-
-		[st->ctx clearDrawable];
-		[st->ctx setView:[st->win contentView]];
-	}
-
-	[st->ctx makeCurrentContext];
-*/
 	if (frame->fmt == VID_FMT_YUV420P) {
 
 		if (!st->PHandle) {
@@ -427,13 +388,8 @@ static int display(struct vidisp_st *st, const char *title,
 		err = EINVAL;
 	}
 
-
-      SDL_GL_SwapWindow(st->window);
-	//[st->ctx flushBuffer];
-
- out:
-	//[pool release];
-
+	SDL_GL_SwapWindow(st->window);
+out:
 	return err;
 }
 
@@ -449,12 +405,7 @@ static void hide(struct vidisp_st *st)
 
 static int module_init(void)
 {
-	//NSApplication *app;
 	int err;
-
-	//app = [NSApplication sharedApplication];
-	//if (!app)
-	//	return ENOSYS;
 
 	SDL_Init(SDL_INIT_VIDEO);
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER,1);
