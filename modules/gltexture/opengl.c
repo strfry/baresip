@@ -50,8 +50,10 @@ static const char *FProgram=
   "void main(void) {\n"
   "  float nx,ny,r,g,b,y,u,v;\n"
   "  vec4 txl,ux,vx;"
-  "  nx=gl_FragCoord.x / 1280.0;\n"
-  "  ny=(%d.0-gl_FragCoord.y) / 720.0;\n"
+  "	 float width = %d.0;      \n"
+  "	 float height = %d.0;      \n"
+  "  nx=gl_FragCoord.x / width;\n"
+  "  ny=(height - gl_FragCoord.y) / height;\n"
   "  y=texture2D(Ytex,vec2(nx,ny)).r;\n"
   "  u=texture2D(Utex,vec2(nx/2.0,ny/2.0)).r;\n"
   "  v=texture2D(Vtex,vec2(nx/2.0,ny/2.0)).r;\n"
@@ -132,7 +134,7 @@ static int setup_shader(struct vidisp_st *st, int width, int height)
 	if (st->PHandle)
 		return 0;
 
-	err = re_sdprintf(&st->prog, FProgram, height);
+	err = re_sdprintf(&st->prog, FProgram, width, height);
 	if (err)
 		return err;
 
