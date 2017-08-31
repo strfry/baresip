@@ -32,16 +32,16 @@ struct vidisp_st {
 static struct vidisp *vid;       /**< OPENGL Video-display      */
 
 static const char *FProgram=
-  "uniform sampler2DRect Ytex;\n"
-  "uniform sampler2DRect Utex,Vtex;\n"
+  "uniform sampler2D Ytex;\n"
+  "uniform sampler2D Utex,Vtex;\n"
   "void main(void) {\n"
   "  float nx,ny,r,g,b,y,u,v;\n"
   "  vec4 txl,ux,vx;"
-  "  nx=gl_TexCoord[0].x;\n"
-  "  ny=%d.0-gl_TexCoord[0].y;\n"
-  "  y=texture2DRect(Ytex,vec2(nx,ny)).r;\n"
-  "  u=texture2DRect(Utex,vec2(nx/2.0,ny/2.0)).r;\n"
-  "  v=texture2DRect(Vtex,vec2(nx/2.0,ny/2.0)).r;\n"
+  "  nx=gl_TexCoord[0].x / 1280.0;\n"
+  "  ny=(%d.0-gl_TexCoord[0].y) / 720.0;\n"
+  "  y=texture2D(Ytex,vec2(nx,ny)).r;\n"
+  "  u=texture2D(Utex,vec2(nx/2.0,ny/2.0)).r;\n"
+  "  v=texture2D(Vtex,vec2(nx/2.0,ny/2.0)).r;\n"
 
   "  y=1.1643*(y-0.0625);\n"
   "  u=u-0.5;\n"
@@ -265,36 +265,36 @@ static inline void draw_yuv(GLuint PHandle, int height,
 	int i;
 
 	/* This might not be required, but should not hurt. */
-	glEnable(GL_TEXTURE_RECTANGLE);
+	glEnable(GL_TEXTURE_2D);
 
 	/* Select texture unit 1 as the active unit and bind the U texture. */
 	glActiveTexture(GL_TEXTURE1);
 	i = glGetUniformLocation(PHandle, "Utex");
 	glUniform1i(i,1);  /* Bind Utex to texture unit 1 */
-	glBindTexture(GL_TEXTURE_RECTANGLE,1);
+	glBindTexture(GL_TEXTURE_2D,1);
 
-	glTexParameteri(GL_TEXTURE_RECTANGLE,
+	glTexParameteri(GL_TEXTURE_2D,
 			GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_RECTANGLE,
+	glTexParameteri(GL_TEXTURE_2D,
 			GL_TEXTURE_MIN_FILTER,GL_LINEAR);
 	//glTexEnvf(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_DECAL);
-	glTexImage2D(GL_TEXTURE_RECTANGLE,0,GL_LUMINANCE,
+	glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
 		     linesizeU, height/2, 0,
 		     GL_LUMINANCE,GL_UNSIGNED_BYTE,Utex);
 
 	/* Select texture unit 2 as the active unit and bind the V texture. */
 	glActiveTexture(GL_TEXTURE2);
 	i = glGetUniformLocation(PHandle, "Vtex");
-	glBindTexture(GL_TEXTURE_RECTANGLE,2);
+	glBindTexture(GL_TEXTURE_2D,2);
 	glUniform1i(i,2);  /* Bind Vtext to texture unit 2 */
 
-	glTexParameteri(GL_TEXTURE_RECTANGLE,
+	glTexParameteri(GL_TEXTURE_2D,
 			GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_RECTANGLE,
+	glTexParameteri(GL_TEXTURE_2D,
 			GL_TEXTURE_MIN_FILTER,GL_LINEAR);
 
 	//glTexEnvf(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_DECAL);
-	glTexImage2D(GL_TEXTURE_RECTANGLE,0,GL_LUMINANCE,
+	glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
 		     linesizeV, height/2, 0,
 		     GL_LUMINANCE,GL_UNSIGNED_BYTE,Vtex);
 
@@ -302,15 +302,15 @@ static inline void draw_yuv(GLuint PHandle, int height,
 	glActiveTexture(GL_TEXTURE0);
 	i = glGetUniformLocation(PHandle,"Ytex");
 	glUniform1i(i,0);  /* Bind Ytex to texture unit 0 */
-	glBindTexture(GL_TEXTURE_RECTANGLE,3);
+	glBindTexture(GL_TEXTURE_2D,3);
 
-	glTexParameteri(GL_TEXTURE_RECTANGLE,
+	glTexParameteri(GL_TEXTURE_2D,
 			GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_RECTANGLE,
+	glTexParameteri(GL_TEXTURE_2D,
 			GL_TEXTURE_MIN_FILTER,GL_LINEAR);
 	//glTexEnvf(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_DECAL);
 
-	glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_LUMINANCE,
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE,
 		     linesizeY, height, 0,
 		     GL_LUMINANCE, GL_UNSIGNED_BYTE, Ytex);
 }
@@ -320,7 +320,25 @@ static inline void draw_blit(int width, int height)
 {
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	/* Draw image */
+	GLfloat texcoords[] = {
+		0, 0,
+		width, 0,
+		width, height,
+		0, height
+	};
+
+	GLfloat vertices[] = {0, 0, 0, // bottom left corner
+                      width,  0, 0, // top left corner
+                       width,  height, 0, // top right corner
+                       0, height, 0}; // bottom right corner
+
+GLubyte indices[] = {0,1,2, // first triangle (bottom left - top left - top right)
+                     0,2,3}; // second triangle (bottom left - top right - bottom right)
+
+glVertexPointer(3, GL_FLOAT, 0, vertices);
+glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, indices);
+/*
+	glDrawElements(GL_QUADS, 6, GL_UNSIGNED_SHORT, kIndicesInformation);
 
 	glBegin(GL_QUADS);
 	{
@@ -334,37 +352,38 @@ static inline void draw_blit(int width, int height)
 		glVertex2i(0, height);
 	}
 	glEnd();
+	*/
 }
 
 
 static inline void draw_rgb(const uint8_t *pic, int w, int h)
 {
-	glEnable(GL_TEXTURE_RECTANGLE);
-	glBindTexture(GL_TEXTURE_RECTANGLE, 1);
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, 1);
 
-	//glTextureRangeAPPLE(GL_TEXTURE_RECTANGLE, w * h * 2, pic);
+	//glTextureRangeAPPLE(GL_TEXTURE_2D, w * h * 2, pic);
 
-	glTexParameteri(GL_TEXTURE_RECTANGLE,
+	glTexParameteri(GL_TEXTURE_2D,
 			GL_TEXTURE_STORAGE_HINT_APPLE,
 			GL_STORAGE_SHARED_APPLE);
 	glPixelStorei(GL_UNPACK_CLIENT_STORAGE_APPLE, GL_TRUE);
 
-	glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MIN_FILTER,
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
 			GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MAG_FILTER,
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
 			GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_WRAP_S,
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
 			GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_WRAP_T,
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
 			GL_CLAMP_TO_EDGE);
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 
-	glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RGBA, w, h, 0,
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
 		     GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pic);
 
 	/* draw */
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glEnable(GL_TEXTURE_RECTANGLE);
+	glEnable(GL_TEXTURE_2D);
 
 	glViewport(0, 0, w, h);
 
@@ -373,7 +392,7 @@ static inline void draw_rgb(const uint8_t *pic, int w, int h)
 
 	glOrtho( (GLfloat)0, (GLfloat)w, (GLfloat)0, (GLfloat)h, -1.0, 1.0);
 
-	glBindTexture(GL_TEXTURE_RECTANGLE, 1);
+	glBindTexture(GL_TEXTURE_2D, 1);
 
 	glMatrixMode(GL_TEXTURE);
 	glLoadIdentity();
