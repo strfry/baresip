@@ -6,9 +6,11 @@
 
 #define GL_GLEXT_PROTOTYPES
 //#include <GLES2/gl2.h>
-#include <SDL/SDL.h>
-#include <GL/gl.h>
-#include <GL/glext.h>
+#include <SDL2/SDL.h>
+//#include <SDL2/SDL_opengles2.h>
+#include <SDL2/SDL_opengl.h>
+//#include <GL/gl.h>
+//#include <GL/glext.h>
 #include <re.h>
 #include <rem.h>
 #include <baresip.h>
@@ -25,7 +27,7 @@ struct vidisp_st {
 	struct vidsz size;              /**< Current size          */
 	int PHandle;
 	char *prog;
-	SDL_Surface* surface;
+	SDL_Window* window;
 };
 
 
@@ -140,9 +142,7 @@ static int setup_shader(struct vidisp_st *st, int width, int height)
 	glViewport(0, 0, width, height);
 	glClearColor(0, 0, 0, 0);
 	glColor3f(1.0f, 0.84f, 0.0f);
-	glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
 	
-
 	/* Set up program objects. */
 	PHandle = glCreateProgram();
 	FSHandle = glCreateShader(GL_FRAGMENT_SHADER);
@@ -357,7 +357,19 @@ static int display(struct vidisp_st *st, const char *title,
 			     st->size.w, st->size.h,
 			     frame->size.w, frame->size.h);
 		}
-		SDL_SetVideoMode(frame->size.w,frame->size.h,32,SDL_HWSURFACE|SDL_ANYFORMAT|SDL_OPENGL);
+		//SDL_SetVideoMode(frame->size.w,frame->size.h,32,SDL_HWSURFACE|SDL_ANYFORMAT|SDL_OPENGL);
+		st->window = SDL_CreateWindow("test", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+            frame->size.w, frame->size.h, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+		SDL_GL_SetSwapInterval(0);
+		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+
+		SDL_GL_CreateContext(st->window);
+
+		SDL_CreateRenderer(
+		st->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
 
 		opengl_reset(st, &frame->size);
 
@@ -416,7 +428,7 @@ static int display(struct vidisp_st *st, const char *title,
 	}
 
 
-      SDL_GL_SwapBuffers();
+      SDL_GL_SwapWindow(st->window);
 	//[st->ctx flushBuffer];
 
  out:
