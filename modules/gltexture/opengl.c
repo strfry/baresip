@@ -153,8 +153,9 @@ static int setup_shader(struct vidisp_st *st, int width, int height)
 	glCompileShader(VSHandle);
 	/* Print the compilation log. */
 	glGetShaderiv(VSHandle, GL_COMPILE_STATUS, &i);
-	if (i != 1) {
-		warning("opengl: vertex shader compile failed\n");
+	if (i != 1) {		
+		glGetShaderInfoLog(FSHandle, sizeof(buf), NULL, buf);
+		warning("opengl: vertex shader compile failed\n%s\n", buf);
 		return ENOSYS;
 	}
 	
@@ -165,11 +166,10 @@ static int setup_shader(struct vidisp_st *st, int width, int height)
 	/* Print the compilation log. */
 	glGetShaderiv(FSHandle, GL_COMPILE_STATUS, &i);
 	if (i != 1) {
-		warning("opengl: fragment shader compile failed\n");
+		glGetShaderInfoLog(FSHandle, sizeof(buf), NULL, buf);
+		warning("opengl: fragment shader compile failed\n%s\n", buf);
 		return ENOSYS;
 	}
-
-	glGetShaderInfoLog(FSHandle, sizeof(buf), NULL, buf);
 
 	/* Create a complete program object. */
 	glAttachShader(PHandle, VSHandle);
