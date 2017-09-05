@@ -54,24 +54,26 @@ static struct vidisp *vid;       /**< OPENGL Video-display      */
 
 static const char* VProgram =
 	"attribute vec2 position;    \n"
+	"attribute vec2 texcoord_in;    \n"
+	"varying vec2 texcoord;"
 	"void main()                  \n"
 	"{                            \n"
+	"   texcoord = texcoord_in;           \n"
 	"   gl_Position = vec4(position, 0.0, 1.0);  \n"
 	"}                            \n";
 
 static const char *FProgram=
   "uniform sampler2D Ytex;\n"
   "uniform sampler2D Utex,Vtex;\n"
+  "varying vec2 texcoord; \n"
   "void main(void) {\n"
   "  float nx,ny,r,g,b,y,u,v;\n"
   "  vec4 txl,ux,vx;          \n"
   "	 float width = %d.0;      \n"
   "	 float height = %d.0;      \n"
-  "  nx=gl_FragCoord.x / width;  \n"
-  "  ny=(height - gl_FragCoord.y) / height;\n"
-  "  y=texture2D(Ytex,vec2(nx,ny)).r;\n"
-  "  u=texture2D(Utex,vec2(nx,ny)).r;\n"
-  "  v=texture2D(Vtex,vec2(nx,ny)).r;\n"
+  "  y=texture2D(Ytex,texcoord).r;\n"
+  "  u=texture2D(Utex,texcoord).r;\n"
+  "  v=texture2D(Vtex,texcoord).r;\n"
 
   "  y=1.1643*(y-0.0625);\n"
   "  u=u-0.5;\n"
@@ -83,6 +85,9 @@ static const char *FProgram=
 
   "  gl_FragColor=vec4(r,g,b,1.0);\n"
   "}\n";
+
+//  "  nx=gl_FragCoord.x / width;  \n"
+//  "  ny=(height - gl_FragCoord.y) / height;\n"
 
 
 static void destructor(void *arg)
@@ -326,10 +331,10 @@ static inline void draw_blit(int width, int height, int PHandle)
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	GLfloat texcoords[] = {
-		0, 0,
-		1.0, 0,
-		0, 1.0,
+		0.0, 1.0,
 		1.0, 1.0,
+		0.0, 0.0,
+		1.0, 0.0,
 	};
 
 	GLfloat vertices[] = {-1, -1, 0, // bottom left corner
@@ -340,6 +345,10 @@ static inline void draw_blit(int width, int height, int PHandle)
     GLint posAttrib = glGetAttribLocation(PHandle, "position");
     glEnableVertexAttribArray(posAttrib);
     glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 0, vertices);
+    
+    GLint texAttrib = glGetAttribLocation(PHandle, "texcoord_in");
+    glEnableVertexAttribArray(texAttrib);
+    glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 0, texcoords);
    
 	//glEnableClientState(GL_VERTEX_ARRAY);
 	    
