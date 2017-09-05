@@ -40,23 +40,19 @@ static const char* VProgram =
 	"   gl_Position = vec4(position, 0.0, 1.0);  \n"
 	"}                            \n";
 
-    //
-  //"  //nx=gl_TexCoord[0].x;\n"
-  //"  //ny=(%d.0-gl_TexCoord[0].y);\n"
-    //
 static const char *FProgram=
   "uniform sampler2D Ytex;\n"
   "uniform sampler2D Utex,Vtex;\n"
   "void main(void) {\n"
   "  float nx,ny,r,g,b,y,u,v;\n"
-  "  vec4 txl,ux,vx;"
+  "  vec4 txl,ux,vx;          \n"
   "	 float width = %d.0;      \n"
   "	 float height = %d.0;      \n"
   "  nx=gl_FragCoord.x / width;  \n"
   "  ny=(height - gl_FragCoord.y) / height;\n"
   "  y=texture2D(Ytex,vec2(nx,ny)).r;\n"
-  "  u=texture2D(Utex,vec2(nx/2.0,ny/2.0)).r;\n"
-  "  v=texture2D(Vtex,vec2(nx/2.0,ny/2.0)).r;\n"
+  "  u=texture2D(Utex,vec2(nx,ny)).r;\n"
+  "  v=texture2D(Vtex,vec2(nx,ny)).r;\n"
 
   "  y=1.1643*(y-0.0625);\n"
   "  u=u-0.5;\n"
