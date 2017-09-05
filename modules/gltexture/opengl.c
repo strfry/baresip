@@ -5,12 +5,31 @@
  */
 
 #define GL_GLEXT_PROTOTYPES
-//#include <GLES2/gl2.h>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_opengles2.h>
-//#include <SDL2/SDL_opengl.h>
-//#include <GL/gl.h>
-//#include <GL/glext.h>
+#define _XOPEN_SOURCE 500
+
+#ifdef RASPBERRY_PI
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <assert.h>
+#include <unistd.h>
+
+#include "bcm_host.h"
+
+#include <EGL/egl.h>
+#include <GLES2/gl2.h>
+
+#else
+
+#include <X11/X.h>
+#include <X11/Xlib.h>
+#include <GL/gl.h>
+#include <GL/glx.h>
+
+#endif
+
 #include <re.h>
 #include <rem.h>
 #include <baresip.h>
@@ -27,7 +46,7 @@ struct vidisp_st {
 	struct vidsz size;              /**< Current size          */
 	int PHandle;
 	char *prog;
-	SDL_Window* window;
+//	SDL_Window* window;
 };
 
 
@@ -37,7 +56,7 @@ static const char* VProgram =
 	"attribute vec2 position;    \n"
 	"void main()                  \n"
 	"{                            \n"
-	"   gl_Position = vec4(position.xy, 0.0, 1.0);  \n"
+	"   gl_Position = vec4(position, 0.0, 1.0);  \n"
 	"}                            \n";
 
 static const char *FProgram=
@@ -48,7 +67,7 @@ static const char *FProgram=
   "  vec4 txl,ux,vx;          \n"
   "	 float width = %d.0;      \n"
   "	 float height = %d.0;      \n"
-  "  nx=gl_FragCoord.x / width;\n"
+  "  nx=gl_FragCoord.x / width;  \n"
   "  ny=(height - gl_FragCoord.y) / height;\n"
   "  y=texture2D(Ytex,vec2(nx,ny)).r;\n"
   "  u=texture2D(Utex,vec2(nx,ny)).r;\n"
@@ -152,6 +171,7 @@ static int setup_shader(struct vidisp_st *st, int width, int height)
 	if (i != 1) {		
 		glGetShaderInfoLog(FSHandle, sizeof(buf), NULL, buf);
 		warning("opengl: vertex shader compile failed\n%s\n", buf);
+		
 		return ENOSYS;
 	}
 	
@@ -166,6 +186,7 @@ static int setup_shader(struct vidisp_st *st, int width, int height)
 		warning("opengl: fragment shader compile failed\n%s\n", buf);
 		return ENOSYS;
 	}
+
 
 	/* Create a complete program object. */
 	glAttachShader(PHandle, VSHandle);
@@ -215,26 +236,6 @@ static int alloc(struct vidisp_st **stp, const struct vidisp *vd,
 		return ENOMEM;
 
 	st->vd = vd;
-
-	/*fmt = [[NSOpenGLPixelFormat alloc] initWithAttributes:attr];
-	if (!fmt) {
-		err = ENOMEM;
-		warning("opengl: Failed creating OpenGL format\n");
-		goto out;
-	} */
-
-	//st->ctx = [[NSOpenGLContext alloc] initWithFormat:fmt
-	//				   shareContext:nil];
-
-	//[fmt release];
-
-/*
-	if (!st->ctx) {
-		err = ENOMEM;
-		warning("opengl: Failed creating OpenGL context\n");
-		goto out;
-	}
-*/
 
 	if (prm && prm->view) {
 	}
@@ -345,6 +346,182 @@ static inline void draw_blit(int width, int height, int PHandle)
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
+#ifndef RASPBERRY_PI
+
+Display* dpy;
+Window win;
+GLXContext glc;
+
+static int create_gl_window(int width, int height)
+{
+	Window root;
+	XVisualInfo* vi;
+	GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, 24, GLX_DOUBLEBUFFER, None };
+	Colormap cmap;
+	XSetWindowAttributes swa;
+
+	dpy = XOpenDisplay(NULL);
+ 
+	 if(dpy == NULL) {
+		warning("\n\tcannot connect to X server\n\n");
+		return -1;
+	 }
+        
+	root = DefaultRootWindow(dpy);
+	vi = glXChooseVisual(dpy, 0, att);
+
+	if(vi == NULL) {
+	warning("\n\tno appropriate visual found\n\n");
+	return ENOENT;
+	}
+	else {
+        info("\n\tvisual %p selected\n", (void *)vi->visualid);
+	}
+
+	cmap = XCreateColormap(dpy, root, vi->visual, AllocNone);
+	swa.colormap = cmap;
+	swa.event_mask = ExposureMask | KeyPressMask;
+ 
+	win = XCreateWindow(dpy, root, 0, 0, width, height, 0, vi->depth,
+		InputOutput, vi->visual, CWColormap | CWEventMask, &swa);
+
+	XMapWindow(dpy, win);
+	XStoreName(dpy, win, "VERY SIMPLE APPLICATION");
+ 
+	glc = glXCreateContext(dpy, vi, NULL, GL_TRUE);
+	glXMakeCurrent(dpy, win, glc);
+}
+
+static void process_gl_window()
+{
+	XWindowAttributes gwa;
+	XEvent xev;
+	
+	XPeekEvent(dpy, &xev);
+
+	if(xev.type == Expose) {
+		XGetWindowAttributes(dpy, win, &gwa);
+		//glViewport(0, 0, gwa.width, gwa.height);
+		//DrawAQuad(); 
+		glXSwapBuffers(dpy, win);
+	}
+	else if(xev.type == KeyPress) {
+		/*glXMakeCurrent(dpy, None, NULL);
+		glXDestroyContext(dpy, glc);
+		XDestroyWindow(dpy, win);
+		XCloseDisplay(dpy);
+		exit(0);
+		* */
+	}
+	glXSwapBuffers(dpy, win);
+}
+
+#else
+
+EGLDisplay eglDisplay;
+EGLSurface surface;
+
+static int create_gl_window(int width, int height)
+{
+	EGLConfig config;
+	EGLContext context;
+	
+   static EGL_DISPMANX_WINDOW_T nativewindow;
+
+   DISPMANX_ELEMENT_HANDLE_T dispman_element;
+   DISPMANX_DISPLAY_HANDLE_T dispman_display;
+   DISPMANX_UPDATE_HANDLE_T dispman_update;
+   VC_RECT_T dst_rect;
+   VC_RECT_T src_rect;
+
+   int display_width;
+   int display_height;
+
+   // create an EGL window surface, passing context width/height
+   int success = graphics_get_display_size(0 /* LCD */, 
+                        &display_width, &display_height);
+   if ( success < 0 )
+   {
+	  warning("could not get dispmanx display size\n");
+      return EGL_FALSE;
+   }
+
+   // You can hardcode the resolution here:
+   //display_width = width;
+   //display_height = height;
+   //display_width = 640;
+   //display_height = 480;
+
+   dst_rect.x = 0;
+   dst_rect.y = 0;
+   dst_rect.width = display_width;
+   dst_rect.height = display_height;
+
+   src_rect.x = 0;
+   src_rect.y = 0;
+   src_rect.width = display_width << 16;
+   src_rect.height = display_height << 16;
+
+   dispman_display = vc_dispmanx_display_open( 0 /* LCD */);
+   dispman_update = vc_dispmanx_update_start( 0 );
+
+   dispman_element = vc_dispmanx_element_add ( dispman_update, 
+      dispman_display, 0/*layer*/, &dst_rect, 0/*src*/,
+      &src_rect, DISPMANX_PROTECTION_NONE, 0 /*alpha*/, 
+      0/*clamp*/, 0/*transform*/);
+
+   if (!dispman_element) {
+	   warning("Could not add dispmanx element\n");
+	   return EGL_FALSE;
+   }
+
+   nativewindow.element = dispman_element;
+   nativewindow.width = display_width;
+   nativewindow.height = display_height;
+   vc_dispmanx_update_submit_sync( dispman_update );
+   // Pass the window to the display that have been created 
+   // to the esContext:
+  // esContext->hWnd = &nativewindow;
+
+  eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+
+  int majorVersion, minorVersion;
+  eglInitialize(eglDisplay, &majorVersion, &minorVersion);
+
+  info("Initialized EGL %d.%d\n", majorVersion, minorVersion);
+
+  int numConfigs;
+  eglGetConfigs(eglDisplay, NULL, 0, &numConfigs);
+  eglChooseConfig(eglDisplay, NULL, &config, 1, &numConfigs);
+  
+     surface = eglCreateWindowSurface(eglDisplay, config, 
+                         (EGLNativeWindowType)&nativewindow, NULL);
+   if ( surface == EGL_NO_SURFACE )
+   {
+	   warning("could not create EGL surface\n");
+      return EGL_FALSE;
+   }
+     // 'context' is returned by a "eglCreateContext" call
+      EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
+   context = eglCreateContext(eglDisplay, config, EGL_NO_CONTEXT, contextAttribs );
+
+   // Make the context current
+   if ( !eglMakeCurrent(eglDisplay, surface, surface, context) )
+   {
+      return EGL_FALSE;
+   }
+
+   return EGL_TRUE;
+}
+
+static void process_gl_window()
+{
+	 eglSwapBuffers(eglDisplay, surface);
+}
+
+
+#endif 
+
 static int display(struct vidisp_st *st, const char *title,
 		   const struct vidframe *frame)
 {
@@ -358,24 +535,25 @@ static int display(struct vidisp_st *st, const char *title,
 			     frame->size.w, frame->size.h);
 		}
 		//SDL_SetVideoMode(frame->size.w,frame->size.h,32,SDL_HWSURFACE|SDL_ANYFORMAT|SDL_OPENGL);
-		st->window = SDL_CreateWindow("test", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+		/*st->window = SDL_CreateWindow("test", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
             frame->size.w, frame->size.h, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
-		if (!st->window) {
-			warning("opengl: Could not create SDL Window: %s\n", SDL_GetError());
-		}
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 		SDL_GL_SetSwapInterval(0);
 		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-		SDL_GLContext ctx = SDL_GL_CreateContext(st->window);
-		if (!ctx) {
-			warning("opengl: Could not create GL context: %s\n", SDL_GetError());
-		}
+		SDL_GL_CreateContext(st->window);
 
 		SDL_CreateRenderer(
 		st->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
+		* */
+
+		err = create_gl_window(frame->size.w, frame->size.h);
+
+		if (!err) {
+			warning("EGL Context Creation failed\n");
+		}
 
 		opengl_reset(st, &frame->size);
 
@@ -405,7 +583,8 @@ static int display(struct vidisp_st *st, const char *title,
 		err = EINVAL;
 	}
 
-	SDL_GL_SwapWindow(st->window);
+	//SDL_GL_SwapWindow(st->window);
+	process_gl_window();
 out:
 	return err;
 }
@@ -422,8 +601,11 @@ static int module_init(void)
 {
 	int err;
 
-	SDL_Init(SDL_INIT_VIDEO);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER,1);
+	//SDL_Init(SDL_INIT_VIDEO);
+	//SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER,1);
+#ifdef RASPBERRY_PI
+	bcm_host_init();
+#endif
 
 	err = vidisp_register(&vid, baresip_vidispl(),
 			      "gltexture", alloc, NULL, display, hide);
@@ -437,7 +619,6 @@ static int module_init(void)
 static int module_close(void)
 {
 	vid = mem_deref(vid);
-
 	return 0;
 }
 
