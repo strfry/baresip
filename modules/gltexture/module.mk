@@ -6,6 +6,7 @@
 
 MOD		:= gltexture
 $(MOD)_SRCS	+= opengl.c
-$(MOD)_LFLAGS	+= -lGL
+$(MOD)_CFLAGS   += -I /opt/vc/include
+$(MOD)_LFLAGS	+= -lGLESv2
 
 include mk/mod.mk

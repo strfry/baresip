@@ -37,7 +37,7 @@ static const char* VProgram =
 	"attribute vec2 position;    \n"
 	"void main()                  \n"
 	"{                            \n"
-	"   gl_Position = vec4(position, 0.0, 1.0);  \n"
+	"   gl_Position = vec4(position.xy, 0.0, 1.0);  \n"
 	"}                            \n";
 
 static const char *FProgram=
@@ -360,13 +360,19 @@ static int display(struct vidisp_st *st, const char *title,
 		//SDL_SetVideoMode(frame->size.w,frame->size.h,32,SDL_HWSURFACE|SDL_ANYFORMAT|SDL_OPENGL);
 		st->window = SDL_CreateWindow("test", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
             frame->size.w, frame->size.h, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+		if (!st->window) {
+			warning("opengl: Could not create SDL Window: %s\n", SDL_GetError());
+		}
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 		SDL_GL_SetSwapInterval(0);
 		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-		SDL_GL_CreateContext(st->window);
+		SDL_GLContext ctx = SDL_GL_CreateContext(st->window);
+		if (!ctx) {
+			warning("opengl: Could not create GL context: %s\n", SDL_GetError());
+		}
 
 		SDL_CreateRenderer(
 		st->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
